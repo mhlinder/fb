@@ -1,29 +1,24 @@
 
 data {
   int<lower=0> T;
-  real x0;
   real x[T];
+  real x0;
 }
 
 parameters {
   real alpha;
-  real<lower=0> s2;
   real<lower=-1,upper=1> phi;
-}
-
-transformed parameters {
-  real mu[T];
-
-  mu[1] = x0;
-  for (i in 2:T)
-    mu[i] = alpha + phi*mu[i-1];
+  real s2;
 }
 
 model {
-  s2 ~ inv_gamma(0.0001, 0.0001);
+  alpha ~ normal(750, 250^2);
   phi ~ uniform(-1, 1);
+  s2 ~ inv_gamma(.0001, .0001);
 
-  for (i in 1:T)
-    x[i] ~ normal(mu[i], s2);
+  x[1] ~ normal(alpha + phi*x0, s2);
+  for (t in 2:T)
+    x[t] ~ normal(alpha + phi*x[t-1], s2);
 }
+
 
