@@ -21,7 +21,7 @@ indata <- list(N = nrow(steps),
                k = length(levels(steps$dow)),
                X = model.matrix(~ dow, data = steps))
 
-fit2 <- stan(file = file.path(rootdir, "anova.stan"),
+fit2 <- stan(file = file.path(rootdir, "2016-11-01-anova.stan"),
              data = indata,
              chains = 1, iter = 5000)
 
