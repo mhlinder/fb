@@ -1,5 +1,7 @@
 #!/usr/bin/Rscript
 
+Sys.setenv(TZ = "America/New_York")
+
 library(magrittr)
 library(dplyr)
 
@@ -25,7 +27,8 @@ out$activity <- get_activity_data(l, today)
 
 print("Fetching daily data...")
 out$daily <- list()
-for (v in c("steps", "distance", "floors", "minutesVery", "caloriesBurnedVsIntake", "getTimeInHeartRateZonesPerDay")) {
+## for (v in c("steps", "distance", "floors", "minutesVery", "caloriesBurnedVsIntake", "getTimeInHeartRateZonesPerDay")) {
+for (v in "steps") {
     print(sprintf("  - Fetching %s", v))
     out$daily[[v]] <- get_daily_data(l, v, start, today)
 }
