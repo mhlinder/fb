@@ -1,3 +1,4 @@
+#!/usr/bin/Rscript
 
 library(magrittr)
 library(dplyr)
@@ -13,7 +14,7 @@ today <- format(today_date, "%Y-%m-%d")
 
 
 ## Provides user, pass
-source("secret.R")
+source(file.path(dirpath, "secret.R"))
 
 l <- login(user, pass)
 
