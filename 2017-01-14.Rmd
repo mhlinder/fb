@@ -33,9 +33,15 @@ daily <-
     out$daily %>%
     as.data.frame %>%
     tbl_df
+
+## Removes day zero, which does not record a full day
+daily <- daily[-1,]
 n <- nrow(daily)
 
-typeof(out)
+## Removes day n, which is incomplete by dint of when the data was collected
+daily <- daily[-n,]
+n <- nrow(daily)
+
 names(out)
 ```
 
@@ -46,23 +52,35 @@ in `daily$steps.time`. We also check whether there are any missing
 days, because we assume there are none.
 
 ```{r}
-s <-
+dates <-
     daily$steps.time %>%
     as.Date
 
 all_days <-
-    seq.Date(s[1], s[n], by = "day") %>%
+    seq.Date(dates[1], dates[n], by = "day") %>%
     as.character
-s <- as.character(s)
+d <- as.character(dates)
 
-if (!all(s == all_days)) {
+if (!all(d == all_days)) {
     stop("Missing days in input data!")
 }
 ```
 
 ```{r fig.align = "center"}
-plot(daily$steps.steps, type = "l", ylab = "Daily steps")
+y <- daily$steps.steps
+
+plot(dates, y, type = "l",
+     xlab = "",
+     ylab = "Steps",
+     main = "Steps by day",
+     xaxt = "n")
+
+## Count backwards by week from the last observation
+at <- seq.Date(dates[n], dates[1], by = "-1 week")
+axis(1, at = at, labels = as.character(at))
 ```
+
+
 
 # Code
 
