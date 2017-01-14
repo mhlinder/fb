@@ -1,0 +1,74 @@
+---
+title: Dashboard
+author: Henry Linder (mhlinder@gmail.com)
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+# Setup
+
+```{r message = FALSE}
+library(magrittr)
+library(dplyr)
+library(knitr)
+```
+
+A cronjob executes every two weeks, which runs the file `get_data.R`
+(the source is included at the end of this file). The script saves a
+dated file in the directory `data/`.
+
+```{r}
+infiles <- list.files("data", full.names = TRUE)
+n_infiles <- length(infiles)
+infiles[n_infiles]
+```
+
+We load the most recent data file, which contains the master variable
+`out`.
+
+```{r}
+load(infiles[n_infiles])
+
+daily <-
+    out$daily %>%
+    as.data.frame %>%
+    tbl_df
+n <- nrow(daily)
+
+typeof(out)
+names(out)
+```
+
+# EDA
+
+We start by considering daily historical step count, which is stored
+in `daily$steps.time`. We also check whether there are any missing
+days, because we assume there are none.
+
+```{r}
+s <-
+    daily$steps.time %>%
+    as.Date
+
+all_days <-
+    seq.Date(s[1], s[n], by = "day") %>%
+    as.character
+s <- as.character(s)
+
+if (!all(s == all_days)) {
+    stop("Missing days in input data!")
+}
+```
+
+```{r fig.align = "center"}
+plot(daily$steps.steps, type = "l", ylab = "Daily steps")
+```
+
+# Code
+
+```{r cache = FALSE, echo = FALSE}
+read_chunk("get_data.R")
+```
+```{r get-data, eval = FALSE}
+```
+
