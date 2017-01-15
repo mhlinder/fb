@@ -70,9 +70,9 @@ y <- daily$steps.steps
 
 ```
 
-We consider a simple time series plot to consider the data,
+## Weekdays and weekends
 
-## Day-of-the-week
+We consider a simple time series plot to consider the data,
 
 ```{r fig.align = "center"}
 ## List of all weekday names, starts on Sunday
@@ -91,9 +91,12 @@ get_colors <- function(url = "https://coolors.co/033f63-28666e-7c9885-b5b682-fed
         paste0("#", .)
 }
 
-colors <- get_colors("https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97")
+colors5 <- get_colors("https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97")
 
-tmp_color <- rep(colors[1], 7)
+colors7 <- c("#8569CF", "#0D9FD8", "#8AD749", "#EECE00",
+             "#F8981F", "#F80E27", "#F640AE")
+names(colors7) <- dows
+tmp_color <- rep(colors5[1], 7)
 tmp_color[wknd] <- "red"
 names(tmp_color) <- dows
 
@@ -132,7 +135,7 @@ qqnorm(y[!is_wknd], main = "Weekdays")
 qqline(y[!is_wknd])
 ```
 
-Notable features include the much long right tail for the weekday
+Notable features include the much longer right tail for the weekday
 distribution, and the larger left tail for weekends. This reflects a
 pattern that I walk the furthest on weekdays, sometimes quite far,
 whereas on the weekends I am much less likely to go on a very long
@@ -158,19 +161,29 @@ var(y[wknd])
 var(y[!wknd])
 ```
 
-Then, we can consider day-of-the-week breakdowns:
+## Day-of-the-week
 
-```{r}
+Then, we can consider day-of-the-week breakdowns, like the average
+steps per day:
+
+```{r fig.align = "center"}
+## Indexes of dates by day-of-week
 ix_dow <- list()
 for (d in dows) {
     ix_dow[[d]] <- which(obs_dow == d)
 }
 
+x <-
+    ix_dow %>%
+    lapply(function(ix) mean(y[ix])) %>%
+    unlist
+
+barplot(x, col = colors7,
+        cex.names = .8,
+        ylim = c(0, 10000), ylab = "Average steps")
 ```
 
-```{r}
-lapply(ix_dow, function(ix) mean(y[ix]))
-```
+Density plots for all days together, and by each day:
 
 ```{r fig.align = "center"}
 
@@ -179,9 +192,11 @@ par(mfrow = c(2, 4))
 plot(density(y), main = "All days")
 for (dow in dows) {
     plot(density(y[ix_dow[[dow]]]),
-           main = dow)
+           main = dow, col = colors7[dow])
 }
 ```
+
+For all days, and each day, normal probability plots:
 
 ```{r fig.align = "center"}
 par(mfrow = c(2, 4))
@@ -190,12 +205,14 @@ qqnorm(y, main = "All days")
 qqline(y)
 for (dow in dows) {
     qqnorm(y[ix_dow[[dow]]],
-           main = dow)
+           main = dow, col = colors7[dow])
     qqline(y[ix_dow[[dow]]])
 }
 ```
 
 # Code
+
+## `get_data.R`
 
 ```{r cache = FALSE, echo = FALSE}
 read_chunk("get_data.R")

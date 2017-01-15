@@ -1,6 +1,7 @@
 #!/usr/bin/Rscript
 
 ## ---- get-data ----
+#!/usr/bin/Rscript
 Sys.setenv(TZ = "America/New_York")
 
 library(magrittr)
