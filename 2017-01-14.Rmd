@@ -2,7 +2,10 @@
 title: Dashboard
 author: Henry Linder (mhlinder@gmail.com)
 date: "`r format(Sys.time(), '%B %d, %Y')`"
-output: html_document
+output:
+    html_document:
+        toc: true
+        code_folding: hide
 ---
 
 # Setup
@@ -11,6 +14,30 @@ output: html_document
 library(magrittr)
 library(dplyr)
 library(knitr)
+```
+
+## Graphical parameters
+
+```{r}
+
+get_colors <- function(url = "https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97") {
+    ## `url` should be a link to a coolors.co color scheme
+    ## Returns a vector with the palette's hex codes as character elements.
+    basename(url) %>%
+        strsplit("-") %>%
+        unlist %>%
+        paste0("#", .)
+}
+
+colors5 <- get_colors("https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97")
+colors7 <- c("#8569CF", "#0D9FD8", "#8AD749", "#EECE00",
+             "#F8981F", "#F80E27", "#F640AE")
+
+## List of all weekday names, starts on Sunday
+dows <- weekdays(x=as.Date(seq(7), origin="1949-12-31"))
+wknd <- dows %in% c("Saturday", "Sunday")
+
+names(colors7) <- dows
 ```
 
 A cronjob executes every two weeks, which runs the file `get_data.R`
@@ -32,7 +59,8 @@ load(infiles[n_infiles])
 daily <-
     out$daily %>%
     as.data.frame %>%
-    tbl_df
+    tbl_df %>%
+    rename(steps = steps.steps)
 
 ## Removes day zero, which does not record a full day
 daily <- daily[-1,]
@@ -53,20 +81,18 @@ days, because we assume there are none.
 
 ```{r fig.align = "center"}
 
-dates <-
+daily$dates <-
     daily$steps.time %>%
     as.Date
 
 all_days <-
-    seq.Date(dates[1], dates[n], by = "day") %>%
+    seq.Date(daily$dates[1], daily$dates[n], by = "day") %>%
     as.character
-d <- as.character(dates)
+d <- as.character(daily$dates)
 
 if (!all(d == all_days)) {
     stop("Missing days in input data!")
 }
-
-y <- daily$steps.steps
 
 ```
 
@@ -75,48 +101,79 @@ y <- daily$steps.steps
 We consider a simple time series plot to consider the data,
 
 ```{r fig.align = "center"}
-## List of all weekday names, starts on Sunday
-dows <- weekdays(x=as.Date(seq(7), origin="1949-12-31"))
-wknd <- dows %in% c("Saturday", "Sunday")
+daily$dow <- weekdays(daily$dates) ## Weekday of each observation
+daily$is_wknd <- daily$dow %in% c("Saturday", "Sunday")
 
-obs_dow <- weekdays(dates) ## Weekday of each observation
-is_wknd <- obs_dow %in% c("Saturday", "Sunday")
+## Find the first day, so the colors match the dates
+st1 <- daily$dow[1]
+ix_st <- which(colors7 %>% names == st1)
+## This vector of indexes rearranges the week starting on day 1, to a
+## week startin gon day ix_st
+ix <- c((ix_st:7), (1:(ix_st-1)))
 
-get_colors <- function(url = "https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97") {
-    ## `url` should be a link to a coolors.co color scheme
-    ## Returns a vector with the palette's hex codes as character elements.
-    basename(url) %>%
-        strsplit("-") %>%
-        unlist %>%
-        paste0("#", .)
-}
-
-colors5 <- get_colors("https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97")
-
-colors7 <- c("#8569CF", "#0D9FD8", "#8AD749", "#EECE00",
-             "#F8981F", "#F80E27", "#F640AE")
-names(colors7) <- dows
 tmp_color <- rep(colors5[1], 7)
 tmp_color[wknd] <- "red"
 names(tmp_color) <- dows
+tmp_color <- tmp_color[ix]
 
-plot(dates, y, type = "l",
+plot(daily$dates, daily$steps, type = "l",
      xlab = "",
      ylab = "Steps",
      main = "Steps by day",
      xaxt = "n")
-points(dates, y, col = tmp_color)
+points(daily$dates, daily$steps, col = tmp_color)
 
 ## Count backwards by week from the last observation
-at <- seq.Date(dates[n], dates[1], by = "-1 week")
+at <- seq.Date(daily$dates[n], daily$dates[1], by = "-1 week")
 axis(1, at = at, labels = as.character(at))
 
-abline(h = mean(y), lty = 2)
+abline(h = mean(daily$steps), lty = 2)
 ```
 
 where the red dots label weekends, and the dotted line represents the
 mean. Although the time series is noisy, there appears to be some
 cyclical trend.
+
+Further, on many occasions, the weekend points are very close to each
+other---ie, their correlations seem high.
+
+```{r}
+sat <- daily %>% filter(dow == "Saturday")
+sun <- daily %>% filter(dow == "Sunday")
+
+if (nrow(sat) != nrow(sun)) {
+    stop("Incomplete weekends!")
+}
+
+n_wknd <- nrow(sat)
+
+ix_match <-
+    sapply(1:n_wknd, function(x) {
+        if (as.double(sun$dates[1] - sat$dates[1]) != 1) {
+            FALSE
+        } else {
+            TRUE
+        }})
+sun <- sun[ix_match,]
+sat <- sat[ix_match,]
+
+cor(sat$steps, sun$steps)
+```
+
+This seems to suggest moderate association between the number of steps
+taken on Saturdays and Sundays.
+
+Several hypothesis tests provide compelling support that there is this
+strong positive correlation between steps on these two days.
+
+```{r}
+cor.test(sat$steps, sun$steps, method = "pearson")
+cor.test(sat$steps, sun$steps, method = "kendall")
+cor.test(sat$steps, sun$steps, method = "spearman")
+```
+
+In other words, either it's a walking weekend, or a resting weekend,
+but I rarely walk a lot on only one day of a weekend.
 
 We also compare kernel density plots of the observations for weekends
 and weekdays.
@@ -124,15 +181,22 @@ and weekdays.
 ```{r fig.align = "center"}
 par(mfrow = c(2,2))
 
-plot(density(y[is_wknd]), main = "Weekends")
+data_weekends <-
+    daily %>%
+    filter(is_wknd)
+data_weekdays <-
+    daily %>%
+    filter(!is_wknd)
 
-plot(density(y[!is_wknd]), main = "Weekdays")
+plot(density(data_weekends$steps), main = "Weekends")
 
-qqnorm(y[is_wknd], main = "Weekends")
-qqline(y[is_wknd])
+plot(density(data_weekdays$steps), main = "Weekdays")
 
-qqnorm(y[!is_wknd], main = "Weekdays")
-qqline(y[!is_wknd])
+qqnorm(data_weekends$steps, main = "Weekends")
+qqline(data_weekends$steps)
+
+qqnorm(data_weekdays$steps, main = "Weekdays")
+qqline(data_weekdays$steps)
 ```
 
 Notable features include the much longer right tail for the weekday
@@ -145,9 +209,9 @@ Interestingly, though, the mean number of steps is higher for the
 weekend than weekdays:
 
 ```{r}
-mean(y[wknd])
+mean(data_weekends$steps)
 
-mean(y[!wknd])
+mean(data_weekdays$steps)
 ```
 
 This can be understood at least partially as a n indication that there
@@ -156,9 +220,9 @@ average I walk fewer per day than on the weekends. And, of course, the
 data reflects this:
 
 ```{r}
-var(y[wknd])
+sd(data_weekends$steps)
 
-var(y[!wknd])
+sd(data_weekdays$steps)
 ```
 
 ## Day-of-the-week
@@ -170,12 +234,12 @@ steps per day:
 ## Indexes of dates by day-of-week
 ix_dow <- list()
 for (d in dows) {
-    ix_dow[[d]] <- which(obs_dow == d)
+    ix_dow[[d]] <- which(daily$dow == d)
 }
 
 x <-
     ix_dow %>%
-    lapply(function(ix) mean(y[ix])) %>%
+    lapply(function(ix) mean(daily$steps[ix])) %>%
     unlist
 
 barplot(x, col = colors7,
@@ -183,15 +247,19 @@ barplot(x, col = colors7,
         ylim = c(0, 10000), ylab = "Average steps")
 ```
 
+These daily values look pretty similar to each other, and an ANOVA
+test for a difference in means may provide a useful way to summarize
+the data.
+
 Density plots for all days together, and by each day:
 
 ```{r fig.align = "center"}
 
 par(mfrow = c(2, 4))
 
-plot(density(y), main = "All days")
+plot(density(daily$steps), main = "All days")
 for (dow in dows) {
-    plot(density(y[ix_dow[[dow]]]),
+    plot(density(daily$steps[ix_dow[[dow]]]),
            main = dow, col = colors7[dow])
 }
 ```
@@ -201,14 +269,58 @@ For all days, and each day, normal probability plots:
 ```{r fig.align = "center"}
 par(mfrow = c(2, 4))
 
-qqnorm(y, main = "All days")
-qqline(y)
+qqnorm(daily$steps, main = "All days")
+qqline(daily$steps)
 for (dow in dows) {
-    qqnorm(y[ix_dow[[dow]]],
+    qqnorm(daily$steps[ix_dow[[dow]]],
            main = dow, col = colors7[dow])
-    qqline(y[ix_dow[[dow]]])
+    qqline(daily$steps[ix_dow[[dow]]])
 }
 ```
+
+These distributions are symmetric and approximately unimodal, so the
+data can be said to be approximately normal---at least for our
+purposes, "approximate" normality suffices. This is because ANOVA is
+robust to deviations from normality, generally speaking.
+
+Recall from above that the weekend and weekday datasets were each
+approximately normal, so we can conduct two ANOVA tests.
+
+```{r}
+aov(steps ~ dow, data = daily) %>%
+    summary
+```
+
+The first ANOVA considers each day to be a separate population, and
+the test pretty conclusively fails to reject the null hypothesis of
+zero difference. In other words, **from a statistical perspect, there
+is no difference in average numbers of steps per day between
+different days of the week.**
+
+```{r}
+aov(steps ~ is_wknd, data = daily) %>%
+    summary
+```
+
+The test-statistic is larger, the p-value is smaller, but there is
+still effectively zero support for the hypothesis that my walking
+habits are different on the weekends from the weekdays, at least in
+terms of the number of steps I take.
+
+In other words, it does not seem meaningful to consider each day of
+the week separately, or weekdays and weekends separately. There are
+likely other, more nuanced subsets possible for the days of the weeK:
+for instance, last fall I took courses on Tuesdays and Thursdays, and
+on those days I had a long walk to and from my car.
+
+```{r}
+daily$ttr <- daily$dow %in% c("Tuesday", "Thursday")
+aov(steps ~ ttr, data = daily) %>%
+    summary
+```
+
+This doesn't show up, either.
+
 
 # Code
 
