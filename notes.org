@@ -1,0 +1,10 @@
+
+* log
+
+** February 27, 2017 (2017-02-27)
+
+   The function ~get_activity_data~, the output of which is stored in
+   the variable ~out$activity~, contains records for activities:
+   auto-detected "Walk"s, "Run" and "Yoga" (code for climbing) when
+   manually activated.
+
