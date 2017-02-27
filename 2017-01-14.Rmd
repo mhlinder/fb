@@ -1,0 +1,222 @@
+---
+title: Dashboard
+author: Henry Linder (mhlinder@gmail.com)
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+# Setup
+
+```{r message = FALSE}
+library(magrittr)
+library(dplyr)
+library(knitr)
+```
+
+A cronjob executes every two weeks, which runs the file `get_data.R`
+(the source is included at the end of this file). The script saves a
+dated file in the directory `data/`.
+
+```{r}
+infiles <- list.files("data", full.names = TRUE)
+n_infiles <- length(infiles)
+infiles[n_infiles]
+```
+
+We load the most recent data file, which contains the master variable
+`out`.
+
+```{r}
+load(infiles[n_infiles])
+
+daily <-
+    out$daily %>%
+    as.data.frame %>%
+    tbl_df
+
+## Removes day zero, which does not record a full day
+daily <- daily[-1,]
+n <- nrow(daily)
+
+## Removes day n, which is incomplete by dint of when the data was collected
+daily <- daily[-n,]
+n <- nrow(daily)
+
+names(out)
+```
+
+# EDA
+
+We start by considering daily historical step count, which is stored
+in `daily$steps.time`. We also check whether there are any missing
+days, because we assume there are none.
+
+```{r fig.align = "center"}
+
+dates <-
+    daily$steps.time %>%
+    as.Date
+
+all_days <-
+    seq.Date(dates[1], dates[n], by = "day") %>%
+    as.character
+d <- as.character(dates)
+
+if (!all(d == all_days)) {
+    stop("Missing days in input data!")
+}
+
+y <- daily$steps.steps
+
+```
+
+## Weekdays and weekends
+
+We consider a simple time series plot to consider the data,
+
+```{r fig.align = "center"}
+## List of all weekday names, starts on Sunday
+dows <- weekdays(x=as.Date(seq(7), origin="1949-12-31"))
+wknd <- dows %in% c("Saturday", "Sunday")
+
+obs_dow <- weekdays(dates) ## Weekday of each observation
+is_wknd <- obs_dow %in% c("Saturday", "Sunday")
+
+get_colors <- function(url = "https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97") {
+    ## `url` should be a link to a coolors.co color scheme
+    ## Returns a vector with the palette's hex codes as character elements.
+    basename(url) %>%
+        strsplit("-") %>%
+        unlist %>%
+        paste0("#", .)
+}
+
+colors5 <- get_colors("https://coolors.co/033f63-28666e-7c9885-b5b682-fedc97")
+
+colors7 <- c("#8569CF", "#0D9FD8", "#8AD749", "#EECE00",
+             "#F8981F", "#F80E27", "#F640AE")
+names(colors7) <- dows
+tmp_color <- rep(colors5[1], 7)
+tmp_color[wknd] <- "red"
+names(tmp_color) <- dows
+
+plot(dates, y, type = "l",
+     xlab = "",
+     ylab = "Steps",
+     main = "Steps by day",
+     xaxt = "n")
+points(dates, y, col = tmp_color)
+
+## Count backwards by week from the last observation
+at <- seq.Date(dates[n], dates[1], by = "-1 week")
+axis(1, at = at, labels = as.character(at))
+
+abline(h = mean(y), lty = 2)
+```
+
+where the red dots label weekends, and the dotted line represents the
+mean. Although the time series is noisy, there appears to be some
+cyclical trend.
+
+We also compare kernel density plots of the observations for weekends
+and weekdays.
+
+```{r fig.align = "center"}
+par(mfrow = c(2,2))
+
+plot(density(y[is_wknd]), main = "Weekends")
+
+plot(density(y[!is_wknd]), main = "Weekdays")
+
+qqnorm(y[is_wknd], main = "Weekends")
+qqline(y[is_wknd])
+
+qqnorm(y[!is_wknd], main = "Weekdays")
+qqline(y[!is_wknd])
+```
+
+Notable features include the much longer right tail for the weekday
+distribution, and the larger left tail for weekends. This reflects a
+pattern that I walk the furthest on weekdays, sometimes quite far,
+whereas on the weekends I am much less likely to go on a very long
+walk.
+
+Interestingly, though, the mean number of steps is higher for the
+weekend than weekdays:
+
+```{r}
+mean(y[wknd])
+
+mean(y[!wknd])
+```
+
+This can be understood at least partially as a n indication that there
+is larger variability in how many steps I walk on weekdays, though on
+average I walk fewer per day than on the weekends. And, of course, the
+data reflects this:
+
+```{r}
+var(y[wknd])
+
+var(y[!wknd])
+```
+
+## Day-of-the-week
+
+Then, we can consider day-of-the-week breakdowns, like the average
+steps per day:
+
+```{r fig.align = "center"}
+## Indexes of dates by day-of-week
+ix_dow <- list()
+for (d in dows) {
+    ix_dow[[d]] <- which(obs_dow == d)
+}
+
+x <-
+    ix_dow %>%
+    lapply(function(ix) mean(y[ix])) %>%
+    unlist
+
+barplot(x, col = colors7,
+        cex.names = .8,
+        ylim = c(0, 10000), ylab = "Average steps")
+```
+
+Density plots for all days together, and by each day:
+
+```{r fig.align = "center"}
+
+par(mfrow = c(2, 4))
+
+plot(density(y), main = "All days")
+for (dow in dows) {
+    plot(density(y[ix_dow[[dow]]]),
+           main = dow, col = colors7[dow])
+}
+```
+
+For all days, and each day, normal probability plots:
+
+```{r fig.align = "center"}
+par(mfrow = c(2, 4))
+
+qqnorm(y, main = "All days")
+qqline(y)
+for (dow in dows) {
+    qqnorm(y[ix_dow[[dow]]],
+           main = dow, col = colors7[dow])
+    qqline(y[ix_dow[[dow]]])
+}
+```
+
+# Code
+
+## `get_data.R`
+
+```{r cache = FALSE, echo = FALSE}
+read_chunk("get_data.R")
+```
+```{r get-data, eval = FALSE}
+```
+
